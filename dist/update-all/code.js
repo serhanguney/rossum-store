@@ -141,14 +141,14 @@ exports.rossum_hook_request_handler = async ({
       } = extension.metadata.upstream;
 
       const isOutdated = currentVersion !== latestVersion;
-      return isOutdated
+      return isOutdated && latestVersion
         ? [
             {
               extensionName: extension.name,
-              latestVersion: latestVersion ?? 'n/a',
+              latestVersion,
               currentVersion,
               extensionKey: extension_id,
-              id: extension_id,
+              id: extension.id,
               integration_id,
             },
           ]
@@ -158,14 +158,13 @@ exports.rossum_hook_request_handler = async ({
 
   if (outdatedExtensions.length === 0)
     return {
-      versionsData,
       intent: {
         info: {
           message: 'Everything is up to date!',
         },
       },
     };
-  console.log('outdatedExtensions', outdatedExtensions);
+
   return {
     intent: {
       form: {
