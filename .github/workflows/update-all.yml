@@ -1,0 +1,12 @@
+name: Tag - Update-all
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - dist/update-all/**
+jobs:
+  call-reusable:
+    uses: ./.github/workflows/_tag_release.yml
+    with:
+      tag_prefix: 'ext/update-all/v'

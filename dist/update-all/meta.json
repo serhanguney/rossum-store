@@ -1,0 +1,12 @@
+{
+  "events": ["invocation.integration"],
+  "config": {
+    "code_source": "code.js",
+    "runtime": "nodejs22.x"
+  },
+  "description": "Updates all extensions in store.",
+  "name": "Command: Update all",
+  "type": "function",
+  "extension_image_url": "https://serhanguney.github.io/rossum-store/static/kittens.webp",
+  "store_description": "Updates all extensions in store.."
+}
