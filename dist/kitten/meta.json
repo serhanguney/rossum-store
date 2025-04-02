@@ -1,0 +1,12 @@
+{
+  "events": ["invocation.integration"],
+  "config": {
+    "code_source": "code.js",
+    "runtime": "nodejs22.x"
+  },
+  "description": "Gets a random cute kitten from cataas.",
+  "name": "Command: Fetch kitten",
+  "type": "function",
+  "extension_image_url": "https://surypavel.github.io/rossum-store-template/static/kittens.webp",
+  "store_description": "Gets a random cute kitten from cataas."
+}
