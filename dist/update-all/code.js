@@ -1,17 +1,16 @@
 const nodeFetch = require('node-fetch');
 
 const invokeIntegration = async ({ body, baseUrl, integrationId, token }) => {
-  return await nodeFetch(
-    `${baseUrl}/api/v1/hook_integrations/${integrationId}/invoke`,
-    {
-      method: 'POST',
-      body: JSON.stringify(body),
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-    }
-  ).then((res) => res.json());
+  const url = `${baseUrl}/api/v1/hook_integrations/${integrationId}/invoke`;
+
+  return await nodeFetch(url, {
+    method: 'POST',
+    body: JSON.stringify(body),
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+  }).then((res) => res.json());
 };
 
 const updateExtensions = async ({ form, token, baseUrl }) => {
@@ -33,10 +32,10 @@ const updateExtensions = async ({ form, token, baseUrl }) => {
             extension: extension.extensionKey,
             version: extension.latestVersion,
           },
-          baseUrl,
-          token,
-          integrationId: extension.integration_id,
         },
+        baseUrl,
+        token,
+        integrationId: extension.integration_id,
       }).then((res) => ({
         data: res,
         extensionId: extension.id,
@@ -49,27 +48,24 @@ const updateExtensions = async ({ form, token, baseUrl }) => {
 
   return await Promise.all(
     updatedExtensions.map((extension) =>
-      nodeFetch(
-        `${defaultProps.base_url}/api/v1/hooks/${extension.extensionId}`,
-        {
-          method: 'PATCH',
-          headers: {
-            Authorization: `Bearer ${defaultProps.rossum_authorization_token}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            ...extension.data,
-            extension_source: 'custom',
-            metadata: {
-              upstream: {
-                version: extension.latestVersion,
-                extension_id: extension.extensionKey,
-                integration_id: extension.integration_id,
-              },
+      nodeFetch(`${baseUrl}/api/v1/hooks/${extension.extensionId}`, {
+        method: 'PATCH',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          ...extension.data,
+          extension_source: 'custom',
+          metadata: {
+            upstream: {
+              version: extension.latestVersion,
+              extension_id: extension.extensionKey,
+              integration_id: extension.integration_id,
             },
-          }),
-        }
-      ).then((res) => res.json())
+          },
+        }),
+      }).then((res) => res.json())
     )
   )
     .then((response) => {
@@ -169,7 +165,7 @@ exports.rossum_hook_request_handler = async ({
         },
       },
     };
-
+  console.log('outdatedExtensions', outdatedExtensions);
   return {
     intent: {
       form: {
