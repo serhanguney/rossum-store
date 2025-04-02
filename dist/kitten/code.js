@@ -6,14 +6,17 @@ exports.rossum_hook_request_handler = async () => {
   return {
     intent: {
       form: {
+        defaultValue: {
+          src: `data:image/jpg;base64,${base64}`,
+          text: 'Figure 1.2: Random kitten'
+        },
         schema: {},
         uiSchema: {
           type: 'VerticalLayout',
           elements: [{
             type: 'Image',
-            src: `data:image/jpg;base64,${base64}`,
-            text: 'Figure 1.2: Random kitten'
-          }, ],
+          }
+        ],
         }
       }
     }

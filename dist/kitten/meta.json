@@ -8,5 +8,11 @@
   "name": "Command: Fetch kitten",
   "type": "function",
   "extension_image_url": "https://surypavel.github.io/rossum-store-template/static/kittens.webp",
-  "store_description": "Gets a random cute kitten from cataas."
+  "store_description": "Gets a random cute kitten from cataas.",
+  "hook_integrations": [{
+    "name": "Show kitten",
+    "description": "Display a nice random kitten",
+    "payload_action": "show_kitten",
+    "type": "command"
+  }]
 }
