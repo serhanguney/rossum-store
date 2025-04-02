@@ -8,5 +8,13 @@
   "name": "Command: Update all",
   "type": "function",
   "extension_image_url": "https://serhanguney.github.io/rossum-store/static/robot.png",
-  "store_description": "Updates all extensions in store.."
+  "store_description": "Updates all extensions in store..",
+  "hook_integrations": [
+    {
+      "name": "Update all",
+      "description": "Serhan's repository",
+      "payload_action": "update_all",
+      "type": "command"
+    }
+  ]
 }
