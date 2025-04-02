@@ -1,15 +1,21 @@
-const apiRequest = async (body) => {
-  return await fetch('https://r8store-api.fly.dev/webhook', {
-    method: 'POST',
-    body: JSON.stringify(body),
-    headers: {
-      'Content-Type': 'application/json',
-    },
-  }).then((res) => res.json());
+const nodeFetch = require('node-fetch');
+
+const invokeIntegration = async ({ body, baseUrl, integrationId, token }) => {
+  return await nodeFetch(
+    `${baseUrl}/api/v1/hook_integrations/${integrationId}/invoke`,
+    {
+      method: 'POST',
+      body: JSON.stringify(body),
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+    }
+  ).then((res) => res.json());
 };
 
-const updateExtensions = async ({ form, defaultProps }) => {
-  if (!defaultProps.rossum_authorization_token)
+const updateExtensions = async ({ form, token, baseUrl }) => {
+  if (!token)
     return {
       intent: {
         error: {
@@ -20,43 +26,50 @@ const updateExtensions = async ({ form, defaultProps }) => {
 
   const updatedExtensions = await Promise.all(
     form.outdatedExtensions.map((extension) =>
-      apiRequest({
-        payload: {
-          name: 'checkout_extension',
-          extension: extension.extensionKey,
-          version: extension.latestVersion,
+      invokeIntegration({
+        body: {
+          payload: {
+            name: 'checkout_extension',
+            extension: extension.extensionKey,
+            version: extension.latestVersion,
+          },
+          baseUrl,
+          token,
+          integrationId: extension.integration_id,
         },
-        ...defaultProps,
       }).then((res) => ({
         data: res,
         extensionId: extension.id,
         latestVersion: extension.latestVersion,
         extensionKey: extension.extensionKey,
-        store_webhook_id: extension.store_webhook_id,
+        integration_id: extension.integration_id,
       }))
     )
   );
 
   return await Promise.all(
     updatedExtensions.map((extension) =>
-      fetch(`${defaultProps.base_url}/api/v1/hooks/${extension.extensionId}`, {
-        method: 'PATCH',
-        headers: {
-          Authorization: `Bearer ${defaultProps.rossum_authorization_token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          ...extension.data,
-          extension_source: 'custom',
-          metadata: {
-            upstream: {
-              version: extension.latestVersion,
-              ext: extension.extensionKey,
-              store_webhook_id: extension.store_webhook_id,
-            },
+      nodeFetch(
+        `${defaultProps.base_url}/api/v1/hooks/${extension.extensionId}`,
+        {
+          method: 'PATCH',
+          headers: {
+            Authorization: `Bearer ${defaultProps.rossum_authorization_token}`,
+            'Content-Type': 'application/json',
           },
-        }),
-      }).then((res) => res.json())
+          body: JSON.stringify({
+            ...extension.data,
+            extension_source: 'custom',
+            metadata: {
+              upstream: {
+                version: extension.latestVersion,
+                extension_id: extension.extensionKey,
+                integration_id: extension.integration_id,
+              },
+            },
+          }),
+        }
+      ).then((res) => res.json())
     )
   )
     .then((response) => {
@@ -83,87 +96,64 @@ const updateExtensions = async ({ form, defaultProps }) => {
 exports.rossum_hook_request_handler = async ({
   rossum_authorization_token,
   base_url,
-  settings,
-  secrets,
   hook,
   form,
 }) => {
-  const defaultProps = {
-    rossum_authorization_token,
-    base_url,
-    settings,
-    secrets,
-    hook,
-  };
-
   if (form)
-    return updateExtensions({
+    return await updateExtensions({
       form,
-      defaultProps,
+      token: rossum_authorization_token,
+      baseUrl: base_url,
     });
 
-  const customExtensions = await apiRequest({
-    payload: {
-      name: 'get_extension_list',
+  const allExtensions = await nodeFetch(`${base_url}/api/v1/hooks`, {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${rossum_authorization_token}`,
     },
-    ...defaultProps,
-  });
+  }).then((res) => res.json());
 
-  const extensionNames = Object.values(customExtensions).map((ext) => ext.name);
-  const extensionKeys = Object.keys(customExtensions);
+  const versionedExtensions = allExtensions.results.filter(
+    (ext) => !!ext.metadata.upstream
+  );
 
-  const existingExtensions = await Promise.all(
-    extensionNames.map((extensionName) =>
-      fetch(
-        `${base_url}/api/v1/hooks?name=${encodeURIComponent(extensionName)}`,
-        {
-          method: 'GET',
-          headers: {
-            Authorization: `Bearer ${rossum_authorization_token}`,
+  const versionsToUpdate = await Promise.all(
+    versionedExtensions.map((ext) =>
+      invokeIntegration({
+        body: {
+          payload: {
+            name: 'get_extension_version',
+            extension: ext.metadata.upstream.extension_id,
           },
-        }
-      ).then((res) => res.json().then((data) => data.results))
-    )
-  ).then((result) => result.flat());
-
-  const versionsData = await Promise.all(
-    extensionKeys.map((extensionKey) =>
-      apiRequest({
-        payload: {
-          name: 'get_extension_version',
-          extension: extensionKey,
         },
-        ...defaultProps,
-      }).then((versions) => {
-        const customExtension = customExtensions[extensionKey];
-
-        return {
-          versions,
-          extensionName: customExtension?.name,
-          extensionKey,
-        };
-      })
+        token: rossum_authorization_token,
+        baseUrl: base_url,
+        integrationId: ext.metadata.upstream.integration_id,
+      }).then((versions) => ({
+        latestVersion: versions[0],
+        extension: ext,
+      }))
     )
   );
 
-  const outdatedExtensions = versionsData.flatMap(
-    ({ versions, extensionName, extensionKey }) => {
-      const existingExtension = existingExtensions.find(
-        (ext) => ext.name === extensionName
-      );
-      const latestVersion = versions[0];
-      const currentVersion = existingExtension?.metadata?.upstream?.version;
+  const outdatedExtensions = versionsToUpdate.flatMap(
+    ({ latestVersion, extension }) => {
+      const {
+        version: currentVersion,
+        integration_id,
+        extension_id,
+      } = extension.metadata.upstream;
 
-      return existingExtension && latestVersion !== currentVersion
+      const isOutdated = currentVersion !== latestVersion;
+      return isOutdated
         ? [
             {
-              extensionName: existingExtension?.name,
-              latestVersion,
+              extensionName: extension.name,
+              latestVersion: latestVersion ?? 'n/a',
               currentVersion,
-              extensionKey,
-              id: existingExtension.id,
-              store_webhook_id:
-                existingExtension?.metadata?.upstream?.store_webhook_id,
+              extensionKey: extension_id,
+              id: extension_id,
+              integration_id,
             },
           ]
         : [];
