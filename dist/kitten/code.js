@@ -8,7 +8,7 @@ exports.rossum_hook_request_handler = async () => {
       form: {
         defaultValue: {
           src: `data:image/jpg;base64,${base64}`,
-          text: 'Figure 1.3: Random kitten',
+          text: 'Figure 1.4: Random kitten',
         },
         schema: {},
         uiSchema: {
