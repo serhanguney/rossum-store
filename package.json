@@ -1,7 +1,22 @@
 {
+  "scripts": {
+    "build": "rollup -c"
+  },
   "dependencies": {
+    "@rossum/api-client": "^0.1.25",
     "dotenv": "^16.4.7",
     "node-fetch": "^2.6.1",
-    "puppeteer": "^24.5.0"
+    "puppeteer": "^24.5.0",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "@rollup/plugin-commonjs": "^28.0.3",
+    "@rollup/plugin-json": "^6.1.0",
+    "@rollup/plugin-node-resolve": "^16.0.1",
+    "@rollup/plugin-terser": "^0.4.4",
+    "@rollup/plugin-typescript": "^12.1.2",
+    "@types/node-fetch": "^2.6.12",
+    "rollup": "^4.39.0",
+    "typescript": "^5.8.2"
   }
 }

@@ -1,7 +1,7 @@
 {
   "events": ["invocation.integration", "invocation.manual"],
   "config": {
-    "code_source": "code.js",
+    "code_source": "code.cjs",
     "runtime": "nodejs22.x"
   },
   "description": "Updates all extensions in store.",

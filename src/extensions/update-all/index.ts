@@ -1,6 +1,33 @@
-const nodeFetch = require('node-fetch');
+import nodeFetch from 'node-fetch';
+import { createElisClient, endpoints } from '@rossum/api-client';
+import { Hook } from '@rossum/api-client/types/src/hooks/models/hook';
+import { ListResponse } from '@rossum/api-client/types/src/utils/listResponse';
+import {
+  Form,
+  formSchema,
+  isHookWithMetadata,
+  OutdatedExtension,
+} from './schemas';
 
-const invokeIntegration = async ({ body, baseUrl, integrationId, token }) => {
+type CommonProps = { baseUrl: string; token: string };
+
+type InvokeIntegrationPayload = CommonProps & {
+  body: {
+    payload: {
+      name: 'get_extension_version' | 'checkout_extension';
+      extension?: string;
+      version?: string;
+    };
+  };
+  integrationId: number;
+};
+// TODO update fn when api-client is updated
+const invokeIntegration = async ({
+  body,
+  baseUrl,
+  integrationId,
+  token,
+}: InvokeIntegrationPayload) => {
   const url = `${baseUrl}/api/v1/hook_integrations/${integrationId}/invoke`;
 
   return await nodeFetch(url, {
@@ -13,7 +40,17 @@ const invokeIntegration = async ({ body, baseUrl, integrationId, token }) => {
   }).then((res) => res.json());
 };
 
-const updateExtensions = async ({ form, token, baseUrl }) => {
+type UpdateExtensionsProps = CommonProps & {
+  form: Form;
+  api: ReturnType<typeof createElisClient>;
+};
+
+const updateExtensions = async ({
+  form,
+  token,
+  baseUrl,
+  api,
+}: UpdateExtensionsProps) => {
   if (!token)
     return {
       intent: {
@@ -48,13 +85,8 @@ const updateExtensions = async ({ form, token, baseUrl }) => {
 
   return await Promise.all(
     updatedExtensions.map((extension) =>
-      nodeFetch(`${baseUrl}/api/v1/hooks/${extension.extensionId}`, {
-        method: 'PATCH',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
+      api.request(
+        endpoints.hooks.patch(extension.extensionId, {
           ...extension.data,
           extension_source: 'custom',
           metadata: {
@@ -64,8 +96,8 @@ const updateExtensions = async ({ form, token, baseUrl }) => {
               integration_id: extension.integration_id,
             },
           },
-        }),
-      }).then((res) => res.json())
+        })
+      )
     )
   )
     .then((response) => {
@@ -89,28 +121,56 @@ const updateExtensions = async ({ form, token, baseUrl }) => {
     }));
 };
 
-exports.rossum_hook_request_handler = async ({
+type ServerlessFnProps = {
+  rossum_authorization_token: string;
+  base_url: string;
+  hook: unknown;
+  form: Form;
+};
+
+export const rossum_hook_request_handler = async ({
   rossum_authorization_token,
   base_url,
   hook,
   form,
-}) => {
-  if (form)
+}: ServerlessFnProps) => {
+  const api = createElisClient({
+    baseUrl: base_url,
+    getAuthToken: () => rossum_authorization_token,
+  });
+
+  if (form) {
+    const parsedForm = formSchema.safeParse(form);
+    if (!parsedForm.success) {
+      return {
+        intent: {
+          error: { message: 'The data received in form payload is invalid' },
+        },
+      };
+    }
     return await updateExtensions({
-      form,
+      form: parsedForm.data,
       token: rossum_authorization_token,
       baseUrl: base_url,
+      api,
     });
+  }
 
-  const allExtensions = await nodeFetch(`${base_url}/api/v1/hooks`, {
-    method: 'GET',
-    headers: {
-      Authorization: `Bearer ${rossum_authorization_token}`,
-    },
-  }).then((res) => res.json());
+  let allExtensions: ListResponse<Hook> = {
+    results: [],
+    pagination: { next: null, previous: null, totalPages: 0, total: 0 },
+  };
+  let error: unknown;
+  try {
+    allExtensions = await api.request(endpoints.hooks.list());
+  } catch (e) {
+    error = e;
+    console.error('error', e);
+    console.warn('error', allExtensions);
+  }
 
-  const versionedExtensions = allExtensions.results.filter(
-    (ext) => !!ext.metadata.upstream
+  const versionedExtensions = allExtensions.results.flatMap((ext) =>
+    isHookWithMetadata(ext) ? [ext] : []
   );
 
   const versionsToUpdate = await Promise.all(
@@ -132,7 +192,7 @@ exports.rossum_hook_request_handler = async ({
     )
   );
 
-  const outdatedExtensions = versionsToUpdate.flatMap(
+  const outdatedExtensions: Array<OutdatedExtension> = versionsToUpdate.flatMap(
     ({ latestVersion, extension }) => {
       const {
         version: currentVersion,
@@ -160,7 +220,7 @@ exports.rossum_hook_request_handler = async ({
     return {
       intent: {
         info: {
-          message: 'Everything is up to date!',
+          message: error,
         },
       },
     };
